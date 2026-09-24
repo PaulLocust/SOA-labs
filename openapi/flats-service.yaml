@@ -1,0 +1,823 @@
+openapi: 3.0.3
+info:
+  title: Flat Collection Service
+  version: "1.0.0"
+  description: |
+    Веб-сервис управления коллекцией объектов класса `Flat` (квартира).
+
+    ### Общие правила
+    * API реализовано в стиле REST: операция над ресурсом определяется HTTP-методом
+      (`POST` — создание, `GET` — чтение, `PUT` — обновление, `DELETE` — удаление).
+    * Все параметры, необходимые для выполнения операции (в том числе поля создаваемого/обновляемого
+      объекта), передаются исключительно в URL запроса — в виде параметров пути и query-параметров.
+      Тело запроса (`requestBody`) не используется ни в одной операции.
+    * Информация об объектах коллекции в ответах сервиса передаётся в формате **XML**
+      (`Content-Type: application/xml`).
+    * При нарушении ограничений целостности, заданных на уровне классов `Flat`, `Coordinates`,
+      `House` (см. схемы), сервис возвращает `400 Bad Request` с телом вида `Error`.
+    * Поле `id` генерируется автоматически и является уникальным, положительным, не может быть `null`.
+    * Поле `creationDate` генерируется автоматически в момент создания объекта.
+
+    ### Особый случай — вложенный объект `house`
+    Поле `house` объекта `Flat` может быть `null`. Если хотя бы один из query-параметров
+    `houseName`, `houseYear`, `houseNumberOfFlatsOnFloor`, `houseNumberOfLifts` передан в запросах
+    создания/обновления, то ВСЕ обязательные под-поля `house` (`houseName`, `houseYear`,
+    `houseNumberOfFlatsOnFloor`, `houseNumberOfLifts`) должны быть переданы одновременно — иначе
+    сервис вернёт `400 Bad Request`. Поле `houseNumberOfFloors` внутри `house` необязательно
+    (может отсутствовать / быть `null`).
+servers:
+  - url: http://helios:8080/api
+    description: Рабочий сервер (helios)
+  - url: http://localhost:8080/api
+    description: Локальный запуск для разработки
+
+tags:
+  - name: Flats
+    description: Базовые CRUD-операции над коллекцией квартир
+  - name: Flats statistics & bulk operations
+    description: Дополнительные операции над коллекцией, размещённые на отдельных URL
+
+paths:
+  /flats:
+    get:
+      tags: [Flats]
+      operationId: getFlats
+      summary: Получить страницу объектов коллекции
+      description: |
+        Возвращает массив объектов `Flat`, удовлетворяющих условиям фильтрации, отсортированный
+        согласно параметру `sort`, разбитый на страницы согласно параметрам `pageNumber` и `pageSize`.
+        Фильтрацию можно применять по любой комбинации полей класса `Flat` (включая поля вложенных
+        объектов `coordinates` и `house`) — все параметры фильтрации необязательны и комбинируются
+        по правилу логического И (AND). Если ни один параметр фильтрации не передан, возвращаются
+        все объекты коллекции (с учётом пагинации и сортировки).
+      parameters:
+        - $ref: '#/components/parameters/PageNumber'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/FilterId'
+        - $ref: '#/components/parameters/FilterName'
+        - $ref: '#/components/parameters/FilterCoordinatesX'
+        - $ref: '#/components/parameters/FilterCoordinatesY'
+        - $ref: '#/components/parameters/FilterCreationDateFrom'
+        - $ref: '#/components/parameters/FilterCreationDateTo'
+        - $ref: '#/components/parameters/FilterAreaMin'
+        - $ref: '#/components/parameters/FilterAreaMax'
+        - $ref: '#/components/parameters/FilterNumberOfRoomsMin'
+        - $ref: '#/components/parameters/FilterNumberOfRoomsMax'
+        - $ref: '#/components/parameters/FilterFurnish'
+        - $ref: '#/components/parameters/FilterView'
+        - $ref: '#/components/parameters/FilterTransport'
+        - $ref: '#/components/parameters/FilterHouseName'
+        - $ref: '#/components/parameters/FilterHouseYearMin'
+        - $ref: '#/components/parameters/FilterHouseYearMax'
+        - $ref: '#/components/parameters/FilterHouseNumberOfFloors'
+        - $ref: '#/components/parameters/FilterHouseNumberOfFlatsOnFloor'
+        - $ref: '#/components/parameters/FilterHouseNumberOfLifts'
+      responses:
+        '200':
+          description: Страница с объектами коллекции
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/FlatPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    post:
+      tags: [Flats]
+      operationId: createFlat
+      summary: Добавить новый элемент в коллекцию
+      description: |
+        Создаёт новый объект `Flat` из значений полей, переданных в виде query-параметров, и
+        добавляет его в коллекцию. Поля `id` и `creationDate` генерируются сервисом автоматически
+        и не принимаются от клиента. При нарушении ограничений целостности (см. описание схемы
+        `Flat`) возвращается `400 Bad Request`.
+      parameters:
+        - $ref: '#/components/parameters/Name'
+        - $ref: '#/components/parameters/CoordinatesX'
+        - $ref: '#/components/parameters/CoordinatesY'
+        - $ref: '#/components/parameters/Area'
+        - $ref: '#/components/parameters/NumberOfRooms'
+        - $ref: '#/components/parameters/Furnish'
+        - $ref: '#/components/parameters/View'
+        - $ref: '#/components/parameters/Transport'
+        - $ref: '#/components/parameters/HouseName'
+        - $ref: '#/components/parameters/HouseYear'
+        - $ref: '#/components/parameters/HouseNumberOfFloors'
+        - $ref: '#/components/parameters/HouseNumberOfFlatsOnFloor'
+        - $ref: '#/components/parameters/HouseNumberOfLifts'
+      responses:
+        '201':
+          description: Объект успешно создан
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Flat'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /flats/{id}:
+    parameters:
+      - $ref: '#/components/parameters/FlatId'
+    get:
+      tags: [Flats]
+      operationId: getFlatById
+      summary: Получить элемент коллекции по ID
+      description: Возвращает объект `Flat` с указанным идентификатором `id`.
+      responses:
+        '200':
+          description: Найденный объект
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Flat'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Flats]
+      operationId: updateFlat
+      summary: Обновить элемент коллекции по ID
+      description: |
+        Полностью заменяет значения полей объекта `Flat` с указанным `id` значениями, переданными
+        в виде query-параметров (аналогичны параметрам операции создания). Поля `id` и
+        `creationDate` изменению не подлежат. Если объект с данным `id` не найден — `404 Not Found`.
+        При нарушении ограничений целостности — `400 Bad Request`.
+      parameters:
+        - $ref: '#/components/parameters/Name'
+        - $ref: '#/components/parameters/CoordinatesX'
+        - $ref: '#/components/parameters/CoordinatesY'
+        - $ref: '#/components/parameters/Area'
+        - $ref: '#/components/parameters/NumberOfRooms'
+        - $ref: '#/components/parameters/Furnish'
+        - $ref: '#/components/parameters/View'
+        - $ref: '#/components/parameters/Transport'
+        - $ref: '#/components/parameters/HouseName'
+        - $ref: '#/components/parameters/HouseYear'
+        - $ref: '#/components/parameters/HouseNumberOfFloors'
+        - $ref: '#/components/parameters/HouseNumberOfFlatsOnFloor'
+        - $ref: '#/components/parameters/HouseNumberOfLifts'
+      responses:
+        '200':
+          description: Объект успешно обновлён
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Flat'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Flats]
+      operationId: deleteFlat
+      summary: Удалить элемент коллекции по ID
+      description: Удаляет из коллекции объект `Flat` с указанным идентификатором `id`.
+      responses:
+        '204':
+          description: Объект успешно удалён
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /flats/by-transport/{transport}:
+    delete:
+      tags: [Flats statistics & bulk operations]
+      operationId: deleteFlatsByTransport
+      summary: Удалить все объекты с заданным значением поля transport
+      description: |
+        Удаляет из коллекции все объекты `Flat`, у которых значение поля `transport` совпадает
+        с переданным в пути значением перечисления `Transport`. Возвращает количество удалённых
+        объектов.
+      parameters:
+        - name: transport
+          in: path
+          required: true
+          description: Значение поля transport, по которому производится удаление
+          schema:
+            $ref: '#/components/schemas/Transport'
+      responses:
+        '200':
+          description: Операция выполнена, возвращено количество удалённых объектов
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/DeletionResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /flats/average-number-of-rooms:
+    get:
+      tags: [Flats statistics & bulk operations]
+      operationId: getAverageNumberOfRooms
+      summary: Рассчитать среднее значение поля numberOfRooms
+      description: |
+        Вычисляет среднее арифметическое значение поля `numberOfRooms` по всем объектам,
+        находящимся в коллекции. Если коллекция пуста, возвращается значение `0`.
+      responses:
+        '200':
+          description: Результат расчёта среднего значения
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/AverageNumberOfRoomsResult'
+
+  /flats/count-by-house-greater-than:
+    get:
+      tags: [Flats statistics & bulk operations]
+      operationId: countFlatsByHouseGreaterThan
+      summary: Вернуть количество объектов, значение поля house которых больше заданного
+      description: |
+        Возвращает количество объектов `Flat` в коллекции, у которых поле `house` больше объекта
+        `House`, заданного query-параметрами `houseName`, `houseYear`, `houseNumberOfFloors`
+        (необязательный), `houseNumberOfFlatsOnFloor`, `houseNumberOfLifts`. Сравнение объектов
+        `House` выполняется последовательно по полям в порядке: `year`, `numberOfFlatsOnFloor`,
+        `numberOfLifts`, `numberOfFloors` (`null` считается меньше любого значения), `name`
+        (лексикографически). Объекты, у которых поле `house` равно `null`, в сравнении не участвуют
+        и не учитываются в результате.
+      parameters:
+        - $ref: '#/components/parameters/HouseNameRequired'
+        - $ref: '#/components/parameters/HouseYearRequired'
+        - $ref: '#/components/parameters/HouseNumberOfFloors'
+        - $ref: '#/components/parameters/HouseNumberOfFlatsOnFloorRequired'
+        - $ref: '#/components/parameters/HouseNumberOfLiftsRequired'
+      responses:
+        '200':
+          description: Результат подсчёта
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/CountResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+components:
+  parameters:
+    FlatId:
+      name: id
+      in: path
+      required: true
+      description: Уникальный идентификатор объекта Flat (значение больше 0)
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+    PageNumber:
+      name: pageNumber
+      in: query
+      required: false
+      description: Порядковый номер страницы выборки (нумерация с 0). По умолчанию — 0.
+      schema:
+        type: integer
+        format: int32
+        minimum: 0
+        default: 0
+
+    PageSize:
+      name: pageSize
+      in: query
+      required: false
+      description: Размер страницы выборки (количество элементов). По умолчанию — 10, максимум — 200.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 200
+        default: 10
+
+    Sort:
+      name: sort
+      in: query
+      required: false
+      description: |
+        Правило сортировки результата в формате `поле,направление`, где `направление` — `asc` или
+        `desc`. Параметр можно указывать несколько раз для сортировки по нескольким полям
+        (например `sort=area,desc&sort=name,asc`). Допустимые имена полей: `id`, `name`,
+        `coordinates.x`, `coordinates.y`, `creationDate`, `area`, `numberOfRooms`, `furnish`,
+        `view`, `transport`, `house.name`, `house.year`, `house.numberOfFloors`,
+        `house.numberOfFlatsOnFloor`, `house.numberOfLifts`. По умолчанию — сортировка по `id,asc`.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+          example: area,desc
+
+    Name:
+      name: name
+      in: query
+      required: true
+      description: Значение поля name (непустая строка)
+      schema:
+        type: string
+        minLength: 1
+    CoordinatesX:
+      name: coordinatesX
+      in: query
+      required: true
+      description: Значение поля coordinates.x (максимум 607)
+      schema:
+        type: number
+        format: double
+        maximum: 607
+    CoordinatesY:
+      name: coordinatesY
+      in: query
+      required: true
+      description: Значение поля coordinates.y (строго больше -560)
+      schema:
+        type: number
+        format: float
+        exclusiveMinimum: true
+        minimum: -560
+    Area:
+      name: area
+      in: query
+      required: true
+      description: Значение поля area (от 1 до 982 включительно)
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+        maximum: 982
+    NumberOfRooms:
+      name: numberOfRooms
+      in: query
+      required: true
+      description: Значение поля numberOfRooms (строго больше 0)
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    Furnish:
+      name: furnish
+      in: query
+      required: false
+      description: Значение поля furnish (необязательное, может быть не передано)
+      schema:
+        $ref: '#/components/schemas/Furnish'
+    View:
+      name: view
+      in: query
+      required: false
+      description: Значение поля view (необязательное, может быть не передано)
+      schema:
+        $ref: '#/components/schemas/View'
+    Transport:
+      name: transport
+      in: query
+      required: true
+      description: Значение поля transport
+      schema:
+        $ref: '#/components/schemas/Transport'
+    HouseName:
+      name: houseName
+      in: query
+      required: false
+      description: Значение поля house.name. Обязательно, если передан хотя бы один из параметров house*.
+      schema:
+        type: string
+        minLength: 1
+    HouseYear:
+      name: houseYear
+      in: query
+      required: false
+      description: Значение поля house.year (строго больше 0). Обязательно, если передан хотя бы один из параметров house*.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    HouseNumberOfFloors:
+      name: houseNumberOfFloors
+      in: query
+      required: false
+      description: Значение поля house.numberOfFloors (строго больше 0). Необязательно, поле может быть null.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    HouseNumberOfFlatsOnFloor:
+      name: houseNumberOfFlatsOnFloor
+      in: query
+      required: false
+      description: Значение поля house.numberOfFlatsOnFloor (строго больше 0). Обязательно, если передан хотя бы один из параметров house*.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    HouseNumberOfLifts:
+      name: houseNumberOfLifts
+      in: query
+      required: false
+      description: Значение поля house.numberOfLifts (строго больше 0). Обязательно, если передан хотя бы один из параметров house*.
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+
+    HouseNameRequired:
+      name: houseName
+      in: query
+      required: true
+      description: Значение поля house.name для сравнения
+      schema:
+        type: string
+        minLength: 1
+    HouseYearRequired:
+      name: houseYear
+      in: query
+      required: true
+      description: Значение поля house.year для сравнения (строго больше 0)
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    HouseNumberOfFlatsOnFloorRequired:
+      name: houseNumberOfFlatsOnFloor
+      in: query
+      required: true
+      description: Значение поля house.numberOfFlatsOnFloor для сравнения (строго больше 0)
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    HouseNumberOfLiftsRequired:
+      name: houseNumberOfLifts
+      in: query
+      required: true
+      description: Значение поля house.numberOfLifts для сравнения (строго больше 0)
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+
+    FilterId:
+      name: id
+      in: query
+      required: false
+      description: Фильтр по точному значению поля id
+      schema:
+        type: integer
+        format: int64
+    FilterName:
+      name: name
+      in: query
+      required: false
+      description: Фильтр по точному значению поля name
+      schema:
+        type: string
+    FilterCoordinatesX:
+      name: coordinatesX
+      in: query
+      required: false
+      description: Фильтр по точному значению поля coordinates.x
+      schema:
+        type: number
+        format: double
+    FilterCoordinatesY:
+      name: coordinatesY
+      in: query
+      required: false
+      description: Фильтр по точному значению поля coordinates.y
+      schema:
+        type: number
+        format: float
+    FilterCreationDateFrom:
+      name: creationDateFrom
+      in: query
+      required: false
+      description: Нижняя граница диапазона фильтрации по полю creationDate (включительно)
+      schema:
+        type: string
+        format: date-time
+    FilterCreationDateTo:
+      name: creationDateTo
+      in: query
+      required: false
+      description: Верхняя граница диапазона фильтрации по полю creationDate (включительно)
+      schema:
+        type: string
+        format: date-time
+    FilterAreaMin:
+      name: areaMin
+      in: query
+      required: false
+      description: Нижняя граница диапазона фильтрации по полю area (включительно)
+      schema:
+        type: integer
+        format: int64
+    FilterAreaMax:
+      name: areaMax
+      in: query
+      required: false
+      description: Верхняя граница диапазона фильтрации по полю area (включительно)
+      schema:
+        type: integer
+        format: int64
+    FilterNumberOfRoomsMin:
+      name: numberOfRoomsMin
+      in: query
+      required: false
+      description: Нижняя граница диапазона фильтрации по полю numberOfRooms (включительно)
+      schema:
+        type: integer
+        format: int64
+    FilterNumberOfRoomsMax:
+      name: numberOfRoomsMax
+      in: query
+      required: false
+      description: Верхняя граница диапазона фильтрации по полю numberOfRooms (включительно)
+      schema:
+        type: integer
+        format: int64
+    FilterFurnish:
+      name: furnish
+      in: query
+      required: false
+      description: Фильтр по точному значению поля furnish
+      schema:
+        $ref: '#/components/schemas/Furnish'
+    FilterView:
+      name: view
+      in: query
+      required: false
+      description: Фильтр по точному значению поля view
+      schema:
+        $ref: '#/components/schemas/View'
+    FilterTransport:
+      name: transport
+      in: query
+      required: false
+      description: Фильтр по точному значению поля transport
+      schema:
+        $ref: '#/components/schemas/Transport'
+    FilterHouseName:
+      name: houseName
+      in: query
+      required: false
+      description: Фильтр по точному значению поля house.name
+      schema:
+        type: string
+    FilterHouseYearMin:
+      name: houseYearMin
+      in: query
+      required: false
+      description: Нижняя граница диапазона фильтрации по полю house.year (включительно)
+      schema:
+        type: integer
+        format: int64
+    FilterHouseYearMax:
+      name: houseYearMax
+      in: query
+      required: false
+      description: Верхняя граница диапазона фильтрации по полю house.year (включительно)
+      schema:
+        type: integer
+        format: int64
+    FilterHouseNumberOfFloors:
+      name: houseNumberOfFloors
+      in: query
+      required: false
+      description: Фильтр по точному значению поля house.numberOfFloors
+      schema:
+        type: integer
+        format: int64
+    FilterHouseNumberOfFlatsOnFloor:
+      name: houseNumberOfFlatsOnFloor
+      in: query
+      required: false
+      description: Фильтр по точному значению поля house.numberOfFlatsOnFloor
+      schema:
+        type: integer
+        format: int64
+    FilterHouseNumberOfLifts:
+      name: houseNumberOfLifts
+      in: query
+      required: false
+      description: Фильтр по точному значению поля house.numberOfLifts
+      schema:
+        type: integer
+        format: int32
+
+  schemas:
+    Furnish:
+      type: string
+      description: Отделка квартиры
+      enum: [DESIGNER, NONE, BAD, LITTLE]
+      xml:
+        name: furnish
+    View:
+      type: string
+      description: Вид из квартиры
+      enum: [YARD, BAD, NORMAL, GOOD, TERRIBLE]
+      xml:
+        name: view
+    Transport:
+      type: string
+      description: Доступность транспорта
+      enum: [FEW, NONE, ENOUGH]
+      xml:
+        name: transport
+
+    Coordinates:
+      type: object
+      description: Координаты расположения квартиры
+      required: [x, y]
+      properties:
+        x:
+          type: number
+          format: double
+          maximum: 607
+          description: Максимальное значение поля 607
+        y:
+          type: number
+          format: float
+          exclusiveMinimum: true
+          minimum: -560
+          description: Значение поля должно быть больше -560
+      xml:
+        name: coordinates
+
+    House:
+      type: object
+      description: Дом, в котором расположена квартира
+      required: [name, year, numberOfFlatsOnFloor, numberOfLifts]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        year:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Значение поля должно быть больше 0
+        numberOfFloors:
+          type: integer
+          format: int64
+          minimum: 1
+          nullable: true
+          description: Поле может быть null. Если задано — значение должно быть больше 0
+        numberOfFlatsOnFloor:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Значение поля должно быть больше 0
+        numberOfLifts:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Значение поля должно быть больше 0
+      xml:
+        name: house
+
+    Flat:
+      type: object
+      description: Квартира
+      required: [id, name, coordinates, creationDate, area, numberOfRooms, transport]
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+          readOnly: true
+          description: Генерируется автоматически. Уникальное значение, больше 0
+        name:
+          type: string
+          minLength: 1
+          description: Не может быть null или пустой строкой
+        coordinates:
+          $ref: '#/components/schemas/Coordinates'
+        creationDate:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Генерируется автоматически в момент создания объекта
+        area:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 982
+          description: Максимальное значение 982, должно быть больше 0
+        numberOfRooms:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Значение поля должно быть больше 0
+        furnish:
+          allOf:
+            - $ref: '#/components/schemas/Furnish'
+          nullable: true
+          description: Поле может быть null
+        view:
+          allOf:
+            - $ref: '#/components/schemas/View'
+          nullable: true
+          description: Поле может быть null
+        transport:
+          $ref: '#/components/schemas/Transport'
+        house:
+          allOf:
+            - $ref: '#/components/schemas/House'
+          nullable: true
+          description: Поле может быть null
+      xml:
+        name: flat
+
+    FlatPage:
+      type: object
+      description: Страница выборки объектов коллекции
+      properties:
+        pageNumber:
+          type: integer
+          format: int32
+        pageSize:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Flat'
+          xml:
+            name: flat
+            wrapped: false
+      xml:
+        name: flatPage
+
+    DeletionResult:
+      type: object
+      description: Результат операции массового удаления
+      properties:
+        deletedCount:
+          type: integer
+          format: int64
+          description: Количество удалённых объектов
+      xml:
+        name: deletionResult
+
+    AverageNumberOfRoomsResult:
+      type: object
+      description: Результат расчёта среднего значения поля numberOfRooms
+      properties:
+        average:
+          type: number
+          format: double
+      xml:
+        name: averageNumberOfRoomsResult
+
+    CountResult:
+      type: object
+      description: Результат подсчёта количества объектов
+      properties:
+        count:
+          type: integer
+          format: int64
+      xml:
+        name: countResult
+
+    Error:
+      type: object
+      description: Описание ошибки, возникшей при обработке запроса
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          format: int32
+          example: 400
+        error:
+          type: string
+          example: Bad Request
+        message:
+          type: string
+          example: Field 'area' must be greater than 0 and not exceed 982
+        path:
+          type: string
+          example: /api/flats
+      xml:
+        name: error
+
+  responses:
+    BadRequest:
+      description: >-
+        Переданные данные нарушают ограничения целостности, заданные на уровне классов Flat /
+        Coordinates / House, либо параметры запроса некорректны
+      content:
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Объект с указанным идентификатором отсутствует в коллекции
+      content:
+        application/xml:
+          schema:
+            $ref: '#/components/schemas/Error'

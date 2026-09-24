@@ -1,0 +1,19 @@
+services:
+  swagger-ui:
+    image: swaggerapi/swagger-ui:v5.17.14
+    container_name: soa-lab1-swagger-ui
+    restart: unless-stopped
+    ports:
+      - "8888:8080"
+    volumes:
+      - ../openapi:/usr/share/nginx/html/openapi:ro
+    environment:
+      # Список спецификаций обоих сервисов - в интерфейсе Swagger UI доступен
+      # выпадающий список для переключения между ними.
+      URLS: |
+        [
+          {"url": "openapi/flats-service.yaml", "name": "Flat Collection Service (/api)"},
+          {"url": "openapi/agency-service.yaml", "name": "Agency Service (/agency)"}
+        ]
+      # Порт, на котором nginx внутри контейнера отдаёт статику/спеки, не меняем.
+      BASE_URL: /

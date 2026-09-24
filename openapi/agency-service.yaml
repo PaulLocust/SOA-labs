@@ -1,0 +1,124 @@
+openapi: 3.0.3
+info:
+  title: Agency Service
+  version: "1.0.0"
+  description: |
+    Второй веб-сервис, расположенный на URL `/agency`. Реализует дополнительные операции,
+    ориентированные на клиента агентства недвижимости, за счёт вызова API первого сервиса
+    (`Flat Collection Service`, см. файл `flats-service.yaml`) — сам сервис собственной
+    коллекции не хранит, а является клиентом (агрегатором) над коллекцией квартир.
+
+    Все параметры операций передаются в URL запроса (параметры пути). Информация об объектах
+    коллекции в ответах передаётся в формате **XML** (`Content-Type: application/xml`), схема
+    объекта `Flat` полностью совпадает со схемой из первого сервиса.
+
+    ### Замечание по интерпретации операций
+    Класс `Flat` в данном варианте задания не содержит явных полей `price` («цена») и `balcony`
+    («балкон»), однако функциональность сервиса `/agency` предполагает поиск «самой дешёвой /
+    дорогой» квартиры и квартиры «с балконом / без балкона». Чтобы операции были детерминированы,
+    приняты следующие соглашения:
+    * в качестве критерия стоимости используется поле `area` (площадь) — чем больше площадь, тем
+      выше условная стоимость квартиры;
+    * наличие балкона определяется через поле `view` («вид из квартиры»): значение `view = null`
+      трактуется как «без балкона» (виду неоткуда взяться), любое непустое значение перечисления
+      `View` — как «с балконом».
+servers:
+  - url: http://helios:8081/agency
+    description: Рабочий сервер (helios)
+  - url: http://localhost:8081/agency
+    description: Локальный запуск для разработки
+
+tags:
+  - name: Agency
+    description: Дополнительные операции, агрегирующие данные первого сервиса
+
+paths:
+  /find-with-balcony/{cheapest}/{with-balcony}:
+    get:
+      tags: [Agency]
+      operationId: findWithBalcony
+      summary: Найти самую дешёвую (или дорогую) квартиру с балконом (или без балкона)
+      description: |
+        Выполняет поиск среди всех квартир, хранящихся в первом сервисе (`GET /flats`), квартиры
+        с наличием либо отсутствием балкона (поле `view`, см. описание выше) и возвращает среди
+        подходящих квартир самую дешёвую или самую дорогую (критерий стоимости — поле `area`).
+        Операция реализована через обращение к `GET /flats` первого сервиса с фильтром по `view`
+        и сортировкой по `area`, с выборкой первого элемента результата.
+      parameters:
+        - name: cheapest
+          in: path
+          required: true
+          description: >-
+            `true` — искать самую дешёвую (наименьшая area) квартиру; `false` — искать самую
+            дорогую (наибольшая area) квартиру
+          schema:
+            type: boolean
+        - name: with-balcony
+          in: path
+          required: true
+          description: >-
+            `true` — искать квартиру с балконом (`view` не `null`); `false` — искать квартиру без
+            балкона (`view` равно `null`)
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Найденная квартира, удовлетворяющая условиям поиска
+          content:
+            application/xml:
+              schema:
+                $ref: 'flats-service.yaml#/components/schemas/Flat'
+        '404':
+          description: В коллекции нет ни одной квартиры, удовлетворяющей заданным условиям
+          content:
+            application/xml:
+              schema:
+                $ref: 'flats-service.yaml#/components/schemas/Error'
+
+  /get-most-expensive/{id1}/{id2}/{id3}:
+    get:
+      tags: [Agency]
+      operationId: getMostExpensiveOfThree
+      summary: Выбрать из трёх квартир с заданными id наиболее дорогую
+      description: |
+        Запрашивает у первого сервиса (`GET /flats/{id}`) три квартиры с идентификаторами `id1`,
+        `id2`, `id3` и возвращает ту из них, у которой наибольшее значение поля `area` (критерий
+        стоимости, см. замечание выше).
+      parameters:
+        - name: id1
+          in: path
+          required: true
+          description: Идентификатор первой квартиры
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: id2
+          in: path
+          required: true
+          description: Идентификатор второй квартиры
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+        - name: id3
+          in: path
+          required: true
+          description: Идентификатор третьей квартиры
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        '200':
+          description: Самая дорогая из трёх запрошенных квартир
+          content:
+            application/xml:
+              schema:
+                $ref: 'flats-service.yaml#/components/schemas/Flat'
+        '404':
+          description: Хотя бы одна из квартир с указанными id1/id2/id3 не найдена в коллекции
+          content:
+            application/xml:
+              schema:
+                $ref: 'flats-service.yaml#/components/schemas/Error'

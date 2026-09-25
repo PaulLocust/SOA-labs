@@ -60,6 +60,9 @@ paths:
         - $ref: '#/components/parameters/FilterCreationDateTo'
         - $ref: '#/components/parameters/FilterAreaMin'
         - $ref: '#/components/parameters/FilterAreaMax'
+        - $ref: '#/components/parameters/FilterPriceMin'
+        - $ref: '#/components/parameters/FilterPriceMax'
+        - $ref: '#/components/parameters/FilterBalcony'
         - $ref: '#/components/parameters/FilterNumberOfRoomsMin'
         - $ref: '#/components/parameters/FilterNumberOfRoomsMax'
         - $ref: '#/components/parameters/FilterFurnish'
@@ -94,6 +97,8 @@ paths:
         - $ref: '#/components/parameters/CoordinatesX'
         - $ref: '#/components/parameters/CoordinatesY'
         - $ref: '#/components/parameters/Area'
+        - $ref: '#/components/parameters/Price'
+        - $ref: '#/components/parameters/Balcony'
         - $ref: '#/components/parameters/NumberOfRooms'
         - $ref: '#/components/parameters/Furnish'
         - $ref: '#/components/parameters/View'
@@ -146,6 +151,8 @@ paths:
         - $ref: '#/components/parameters/CoordinatesX'
         - $ref: '#/components/parameters/CoordinatesY'
         - $ref: '#/components/parameters/Area'
+        - $ref: '#/components/parameters/Price'
+        - $ref: '#/components/parameters/Balcony'
         - $ref: '#/components/parameters/NumberOfRooms'
         - $ref: '#/components/parameters/Furnish'
         - $ref: '#/components/parameters/View'
@@ -181,7 +188,7 @@ paths:
 
   /flats/by-transport/{transport}:
     delete:
-      tags: [Special operation]
+      tags: [Special Operations]
       operationId: deleteFlatsByTransport
       summary: Удалить все объекты с заданным значением поля transport
       description: |
@@ -207,7 +214,7 @@ paths:
 
   /flats/average-number-of-rooms:
     get:
-      tags: [Special operation]
+      tags: [Special Operations]
       operationId: getAverageNumberOfRooms
       summary: Рассчитать среднее значение поля numberOfRooms
       description: |
@@ -223,7 +230,7 @@ paths:
 
   /flats/count-by-house-greater-than:
     get:
-      tags: [Special operation]
+      tags: [Special Operations]
       operationId: countFlatsByHouseGreaterThan
       summary: Вернуть количество объектов, значение поля house которых больше заданного
       description: |
@@ -293,7 +300,7 @@ components:
         Правило сортировки результата в формате `поле,направление`, где `направление` — `asc` или
         `desc`. Параметр можно указывать несколько раз для сортировки по нескольким полям
         (например `sort=area,desc&sort=name,asc`). Допустимые имена полей: `id`, `name`,
-        `coordinates.x`, `coordinates.y`, `creationDate`, `area`, `numberOfRooms`, `furnish`,
+        `coordinates.x`, `coordinates.y`, `creationDate`, `area`, `price`, `balcony`, `numberOfRooms`, `furnish`,
         `view`, `transport`, `house.name`, `house.year`, `house.numberOfFloors`,
         `house.numberOfFlatsOnFloor`, `house.numberOfLifts`. По умолчанию — сортировка по `id,asc`.
       style: form
@@ -302,7 +309,7 @@ components:
         type: array
         items:
           type: string
-          example: area,desc
+          example: price,desc
 
     Name:
       name: name
@@ -329,8 +336,7 @@ components:
       schema:
         type: number
         format: float
-        exclusiveMinimum: true
-        minimum: -560
+        exclusiveMinimum: -560
     Area:
       name: area
       in: query
@@ -341,6 +347,22 @@ components:
         format: int64
         minimum: 1
         maximum: 982
+    Price:
+      name: price
+      in: query
+      required: true
+      description: Значение поля price (строго больше 0)
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    Balcony:
+      name: balcony
+      in: query
+      required: true
+      description: Значение поля balcony (наличие балкона)
+      schema:
+        type: boolean
     NumberOfRooms:
       name: numberOfRooms
       in: query
@@ -515,6 +537,29 @@ components:
       schema:
         type: integer
         format: int64
+    FilterPriceMin:
+      name: priceMin
+      in: query
+      required: false
+      description: Нижняя граница диапазона фильтрации по полю price (включительно)
+      schema:
+        type: integer
+        format: int64
+    FilterPriceMax:
+      name: priceMax
+      in: query
+      required: false
+      description: Верхняя граница диапазона фильтрации по полю price (включительно)
+      schema:
+        type: integer
+        format: int64
+    FilterBalcony:
+      name: balcony
+      in: query
+      required: false
+      description: Фильтр по наличию балкона
+      schema:
+        type: boolean
     FilterNumberOfRoomsMin:
       name: numberOfRoomsMin
       in: query
@@ -673,7 +718,7 @@ components:
     Flat:
       type: object
       description: Квартира
-      required: [id, name, coordinates, creationDate, area, numberOfRooms, transport]
+      required: [id, name, coordinates, creationDate, area, price, balcony, numberOfRooms, transport]
       properties:
         id:
           type: integer
@@ -698,6 +743,14 @@ components:
           minimum: 1
           maximum: 982
           description: Максимальное значение 982, должно быть больше 0
+        price:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Значение поля должно быть больше 0
+        balcony:
+          type: boolean
+          description: Наличие балкона
         numberOfRooms:
           type: integer
           format: int64

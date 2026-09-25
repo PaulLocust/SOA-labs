@@ -3,78 +3,89 @@ info:
   title: Agency Service
   version: "1.0.0"
   description: |
-    Второй веб-сервис, расположенный на URL `/agency`. Реализует дополнительные операции,
-    ориентированные на клиента агентства недвижимости, за счёт вызова API первого сервиса
-    (`Flat Collection Service`, см. файл `flats-service.yaml`) — сам сервис собственной
-    коллекции не хранит, а является клиентом (агрегатором) над коллекцией квартир.
+    Сервис агентства недвижимости. Свою коллекцию не хранит, данные о квартирах берёт из первого сервиса
+    (Flat Collection Service).
 
-    Все параметры операций передаются в URL запроса (параметры пути). Информация об объектах
-    коллекции в ответах передаётся в формате **XML** (`Content-Type: application/xml`), схема
-    объекта `Flat` полностью совпадает со схемой из первого сервиса.
+    Параметры передаются в пути запроса. Ответы приходят в формате XML, квартира описывается той же схемой
+    `Flat`, что и в первом сервисе.
 servers:
   - url: http://localhost:8081/agency
     description: Второй сервис (Agency)
 
 tags:
   - name: Agency
-    description: Дополнительные операции, агрегирующие данные первого сервиса
+    description: Операции агентства поверх первого сервиса
 
 paths:
   /find-with-balcony/{cheapest}/{with-balcony}:
     get:
       tags: [Agency]
       operationId: findWithBalcony
-      summary: Найти самую дешёвую (или дорогую) квартиру с балконом (или без балкона)
+      summary: Найти самую дешёвую или самую дорогую квартиру с балконом или без
       description: |
-        Выполняет поиск среди всех квартир, хранящихся в первом сервисе (`GET /flats`), квартиры
-        с наличием либо отсутствием балкона (поле `balcony`) и возвращает среди подходящих квартир
-        самую дешёвую или самую дорогую (критерий стоимости — поле `price`). Операция реализована
-        через обращение к `GET /flats` первого сервиса с фильтром по `balcony` и сортировкой
-        по `price`, с выборкой первого элемента результата.
+        Ищет самую дешёвую (`cheapest=true`) или самую дорогую (`cheapest=false`) квартиру
+        с балконом (`with-balcony=true`) или без него (`with-balcony=false`).
+        Для этого вызывает `GET /flats` первого сервиса с фильтром по `balcony` и сортировкой по `price`.
       parameters:
         - name: cheapest
           in: path
           required: true
-          description: >-
-            `true` — искать самую дешёвую (наименьшая price) квартиру; `false` — искать самую
-            дорогую (наибольшая price) квартиру
+          description: true, чтобы искать самую дешёвую квартиру, false, чтобы самую дорогую
           schema:
             type: boolean
         - name: with-balcony
           in: path
           required: true
-          description: >-
-            `true` — искать квартиру с балконом (`balcony = true`); `false` — искать квартиру без
-            балкона (`balcony = false`)
+          description: true, чтобы искать квартиру с балконом, false, чтобы без балкона
           schema:
             type: boolean
       responses:
         '200':
-          description: Найденная квартира, удовлетворяющая условиям поиска
+          description: Найденная квартира
           content:
             application/xml:
               schema:
                 $ref: 'flats-service.yaml#/components/schemas/Flat'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
-          description: В коллекции нет ни одной квартиры, удовлетворяющей заданным условиям
+          description: Подходящих квартир нет
           content:
             application/xml:
               schema:
                 $ref: 'flats-service.yaml#/components/schemas/Error'
+              example: |
+                <error>
+                  <timestamp>2026-09-25T12:00:00Z</timestamp>
+                  <status>404</status>
+                  <error>Not Found</error>
+                  <message>No flats with balcony found</message>
+                  <path>/agency/find-with-balcony/true/true</path>
+                </error>
+        '406':
+          $ref: '#/components/responses/NotAcceptable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
 
   /get-most-expensive/{id1}/{id2}/{id3}:
     get:
       tags: [Agency]
       operationId: getMostExpensiveOfThree
-      summary: Выбрать из трёх квартир с заданными id наиболее дорогую
+      summary: Выбрать самую дорогую из трёх квартир
       description: |
-        Запрашивает у первого сервиса (`GET /flats/{id}`) три квартиры с идентификаторами `id1`,
-        `id2`, `id3` и возвращает ту из них, у которой наибольшее значение поля `price`.
+        Получает из первого сервиса квартиры с id `id1`, `id2`, `id3` (через `GET /flats/{id}`)
+        и возвращает ту, у которой больше `price`.
       parameters:
         - name: id1
           in: path
           required: true
-          description: Идентификатор первой квартиры
+          description: id первой квартиры
           schema:
             type: integer
             format: int64
@@ -82,7 +93,7 @@ paths:
         - name: id2
           in: path
           required: true
-          description: Идентификатор второй квартиры
+          description: id второй квартиры
           schema:
             type: integer
             format: int64
@@ -90,21 +101,128 @@ paths:
         - name: id3
           in: path
           required: true
-          description: Идентификатор третьей квартиры
+          description: id третьей квартиры
           schema:
             type: integer
             format: int64
             minimum: 1
       responses:
         '200':
-          description: Самая дорогая из трёх запрошенных квартир
+          description: Самая дорогая из трёх квартир
           content:
             application/xml:
               schema:
                 $ref: 'flats-service.yaml#/components/schemas/Flat'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
-          description: Хотя бы одна из квартир с указанными id1/id2/id3 не найдена в коллекции
+          description: Хотя бы одна из квартир не найдена
           content:
             application/xml:
               schema:
                 $ref: 'flats-service.yaml#/components/schemas/Error'
+              example: |
+                <error>
+                  <timestamp>2026-09-25T12:00:00Z</timestamp>
+                  <status>404</status>
+                  <error>Not Found</error>
+                  <message>Flat with id 3 not found</message>
+                  <path>/agency/get-most-expensive/1/2/3</path>
+                </error>
+        '406':
+          $ref: '#/components/responses/NotAcceptable'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/GatewayTimeout'
+
+components:
+  responses:
+    BadRequest:
+      description: Некорректные параметры пути (например, cheapest не равен true/false или id не число)
+      content:
+        application/xml:
+          schema:
+            $ref: 'flats-service.yaml#/components/schemas/Error'
+          example: |
+            <error>
+              <timestamp>2026-09-25T12:00:00Z</timestamp>
+              <status>400</status>
+              <error>Bad Request</error>
+              <message>Parameter 'cheapest' must be true or false</message>
+              <path>/agency/find-with-balcony/yes/true</path>
+            </error>
+    NotAcceptable:
+      description: Клиент запросил формат ответа, отличный от XML (заголовок Accept)
+      content:
+        application/xml:
+          schema:
+            $ref: 'flats-service.yaml#/components/schemas/Error'
+          example: |
+            <error>
+              <timestamp>2026-09-25T12:00:00Z</timestamp>
+              <status>406</status>
+              <error>Not Acceptable</error>
+              <message>Only application/xml is supported</message>
+              <path>/agency/get-most-expensive/1/2/3</path>
+            </error>
+    InternalServerError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/xml:
+          schema:
+            $ref: 'flats-service.yaml#/components/schemas/Error'
+          example: |
+            <error>
+              <timestamp>2026-09-25T12:00:00Z</timestamp>
+              <status>500</status>
+              <error>Internal Server Error</error>
+              <message>Unexpected error</message>
+              <path>/agency/get-most-expensive/1/2/3</path>
+            </error>
+    BadGateway:
+      description: Первый сервис вернул ошибку или некорректный ответ
+      content:
+        application/xml:
+          schema:
+            $ref: 'flats-service.yaml#/components/schemas/Error'
+          example: |
+            <error>
+              <timestamp>2026-09-25T12:00:00Z</timestamp>
+              <status>502</status>
+              <error>Bad Gateway</error>
+              <message>Flat Collection Service returned 500</message>
+              <path>/agency/get-most-expensive/1/2/3</path>
+            </error>
+    ServiceUnavailable:
+      description: Первый сервис недоступен
+      content:
+        application/xml:
+          schema:
+            $ref: 'flats-service.yaml#/components/schemas/Error'
+          example: |
+            <error>
+              <timestamp>2026-09-25T12:00:00Z</timestamp>
+              <status>503</status>
+              <error>Service Unavailable</error>
+              <message>Flat Collection Service is unavailable</message>
+              <path>/agency/get-most-expensive/1/2/3</path>
+            </error>
+    GatewayTimeout:
+      description: Первый сервис не ответил вовремя
+      content:
+        application/xml:
+          schema:
+            $ref: 'flats-service.yaml#/components/schemas/Error'
+          example: |
+            <error>
+              <timestamp>2026-09-25T12:00:00Z</timestamp>
+              <status>504</status>
+              <error>Gateway Timeout</error>
+              <message>Flat Collection Service did not respond in time</message>
+              <path>/agency/get-most-expensive/1/2/3</path>
+            </error>

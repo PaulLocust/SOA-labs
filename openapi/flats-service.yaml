@@ -210,7 +210,7 @@ paths:
         - $ref: '#/components/parameters/HouseNumberOfFlatsOnFloor'
         - $ref: '#/components/parameters/HouseNumberOfLifts'
       responses:
-        '201':
+        '200':
           description: Квартира обновлена
           content:
             application/xml:

@@ -64,8 +64,6 @@ paths:
                 </error>
         '406':
           $ref: '#/components/responses/NotAcceptable'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
         '502':
           $ref: '#/components/responses/BadGateway'
         '503':
@@ -80,7 +78,7 @@ paths:
       summary: Выбрать самую дорогую из трёх квартир
       description: |
         Получает из первого сервиса квартиры с id `id1`, `id2`, `id3` (через `GET /flats/{id}`)
-        и возвращает ту, у которой больше `price`.
+        и возвращает ту, у которой больше `price`. Все три id должны быть разными.
       parameters:
         - name: id1
           in: path
@@ -131,8 +129,8 @@ paths:
                 </error>
         '406':
           $ref: '#/components/responses/NotAcceptable'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         '502':
           $ref: '#/components/responses/BadGateway'
         '503':
@@ -170,8 +168,8 @@ components:
               <message>Only application/xml is supported</message>
               <path>/agency/get-most-expensive/1/2/3</path>
             </error>
-    InternalServerError:
-      description: Внутренняя ошибка сервера
+    UnprocessableEntity:
+      description: id меньше 1 или среди id есть одинаковые
       content:
         application/xml:
           schema:
@@ -179,10 +177,10 @@ components:
           example: |
             <error>
               <timestamp>2026-09-25T12:00:00Z</timestamp>
-              <status>500</status>
-              <error>Internal Server Error</error>
-              <message>Unexpected error</message>
-              <path>/agency/get-most-expensive/1/2/3</path>
+              <status>422</status>
+              <error>Unprocessable Entity</error>
+              <message>id1, id2 and id3 must be different</message>
+              <path>/agency/get-most-expensive/1/1/3</path>
             </error>
     BadGateway:
       description: Первый сервис вернул ошибку или некорректный ответ
@@ -195,7 +193,7 @@ components:
               <timestamp>2026-09-25T12:00:00Z</timestamp>
               <status>502</status>
               <error>Bad Gateway</error>
-              <message>Flat Collection Service returned 500</message>
+              <message>Flat Collection Service returned an invalid response</message>
               <path>/agency/get-most-expensive/1/2/3</path>
             </error>
     ServiceUnavailable:

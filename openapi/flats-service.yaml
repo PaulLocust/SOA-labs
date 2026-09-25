@@ -67,8 +67,20 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '406':
           $ref: '#/components/responses/NotAcceptable'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
+        '422':
+          description: Некорректный диапазон фильтра (например, areaMin больше areaMax)
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example: |
+                <error>
+                  <timestamp>2026-09-25T12:00:00Z</timestamp>
+                  <status>422</status>
+                  <error>Unprocessable Entity</error>
+                  <message>areaMin must not be greater than areaMax</message>
+                  <path>/api/flats</path>
+                </error>
     post:
       tags: [Flats]
       operationId: createFlat
@@ -109,8 +121,6 @@ paths:
           $ref: '#/components/responses/NotAcceptable'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
 
   /flats/{id}:
     parameters:
@@ -133,8 +143,8 @@ paths:
           $ref: '#/components/responses/NotFound'
         '406':
           $ref: '#/components/responses/NotAcceptable'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
     put:
       tags: [Flats]
       operationId: updateFlat
@@ -173,8 +183,47 @@ paths:
           $ref: '#/components/responses/NotAcceptable'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
+    patch:
+      tags: [Flats]
+      operationId: patchFlat
+      summary: Частично обновить квартиру
+      description: |
+        Меняет только те поля квартиры, которые переданы в запросе, остальные остаются прежними.
+        Нужно передать хотя бы один параметр. Поля `id` и `creationDate` не меняются.
+
+        Если у квартиры уже есть дом, параметры `house*` можно передавать по одному. Если дома нет,
+        то чтобы его добавить, нужно передать все обязательные параметры дома, как при создании.
+      parameters:
+        - $ref: '#/components/parameters/NameOptional'
+        - $ref: '#/components/parameters/CoordinatesXOptional'
+        - $ref: '#/components/parameters/CoordinatesYOptional'
+        - $ref: '#/components/parameters/AreaOptional'
+        - $ref: '#/components/parameters/PriceOptional'
+        - $ref: '#/components/parameters/BalconyOptional'
+        - $ref: '#/components/parameters/NumberOfRoomsOptional'
+        - $ref: '#/components/parameters/Furnish'
+        - $ref: '#/components/parameters/View'
+        - $ref: '#/components/parameters/TransportOptional'
+        - $ref: '#/components/parameters/HouseName'
+        - $ref: '#/components/parameters/HouseYear'
+        - $ref: '#/components/parameters/HouseNumberOfFloors'
+        - $ref: '#/components/parameters/HouseNumberOfFlatsOnFloor'
+        - $ref: '#/components/parameters/HouseNumberOfLifts'
+      responses:
+        '200':
+          description: Квартира обновлена
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/Flat'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '406':
+          $ref: '#/components/responses/NotAcceptable'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
     delete:
       tags: [Flats]
       operationId: deleteFlat
@@ -187,8 +236,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /flats/by-transport/{transport}:
     delete:
@@ -216,8 +265,6 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '406':
           $ref: '#/components/responses/NotAcceptable'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
 
   /flats/average-number-of-rooms:
     get:
@@ -234,8 +281,6 @@ paths:
                 $ref: '#/components/schemas/AverageNumberOfRoomsResult'
         '406':
           $ref: '#/components/responses/NotAcceptable'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
 
   /flats/count-by-house-greater-than:
     get:
@@ -265,8 +310,6 @@ paths:
           $ref: '#/components/responses/NotAcceptable'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
 
 components:
   parameters:
@@ -274,7 +317,7 @@ components:
       name: id
       in: path
       required: true
-      description: id квартиры
+      description: id квартиры, больше 0
       schema:
         type: integer
         format: int64
@@ -449,6 +492,76 @@ components:
         type: integer
         format: int32
         minimum: 1
+
+    NameOptional:
+      name: name
+      in: query
+      required: false
+      description: Название квартиры, не пустое
+      schema:
+        type: string
+        minLength: 1
+    CoordinatesXOptional:
+      name: coordinatesX
+      in: query
+      required: false
+      description: Координата x, не больше 607
+      schema:
+        type: number
+        format: double
+        maximum: 607
+    CoordinatesYOptional:
+      name: coordinatesY
+      in: query
+      required: false
+      description: Координата y, больше -560
+      schema:
+        type: number
+        format: float
+        minimum: -560
+        exclusiveMinimum: true
+    AreaOptional:
+      name: area
+      in: query
+      required: false
+      description: Площадь, от 1 до 982
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+        maximum: 982
+    PriceOptional:
+      name: price
+      in: query
+      required: false
+      description: Цена, больше 0
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    BalconyOptional:
+      name: balcony
+      in: query
+      required: false
+      description: Есть ли балкон
+      schema:
+        type: boolean
+    NumberOfRoomsOptional:
+      name: numberOfRooms
+      in: query
+      required: false
+      description: Количество комнат, больше 0
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    TransportOptional:
+      name: transport
+      in: query
+      required: false
+      description: Транспортная доступность
+      schema:
+        $ref: '#/components/schemas/Transport'
 
     HouseNameRequired:
       name: houseName
@@ -916,7 +1029,7 @@ components:
               <path>/api/flats</path>
             </error>
     UnprocessableEntity:
-      description: Значения полей нарушают ограничения класса (например, area больше 982 или пустое name)
+      description: Значения нарушают ограничения класса (например, area больше 982, пустое name или id меньше 1)
       content:
         application/xml:
           schema:
@@ -927,19 +1040,5 @@ components:
               <status>422</status>
               <error>Unprocessable Entity</error>
               <message>Field 'area' must be between 1 and 982</message>
-              <path>/api/flats</path>
-            </error>
-    InternalServerError:
-      description: Внутренняя ошибка сервера
-      content:
-        application/xml:
-          schema:
-            $ref: '#/components/schemas/Error'
-          example: |
-            <error>
-              <timestamp>2026-09-25T12:00:00Z</timestamp>
-              <status>500</status>
-              <error>Internal Server Error</error>
-              <message>Unexpected error</message>
               <path>/api/flats</path>
             </error>

@@ -23,10 +23,8 @@ info:
       трактуется как «без балкона» (виду неоткуда взяться), любое непустое значение перечисления
       `View` — как «с балконом».
 servers:
-  - url: http://helios:8081/agency
-    description: Рабочий сервер (helios)
   - url: http://localhost:8081/agency
-    description: Локальный запуск для разработки
+    description: Второй сервис (Agency)
 
 tags:
   - name: Agency

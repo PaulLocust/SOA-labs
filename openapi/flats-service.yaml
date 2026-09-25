@@ -26,16 +26,14 @@ info:
     сервис вернёт `400 Bad Request`. Поле `houseNumberOfFloors` внутри `house` необязательно
     (может отсутствовать / быть `null`).
 servers:
-  - url: http://helios:8080/api
-    description: Рабочий сервер (helios)
   - url: http://localhost:8080/api
-    description: Локальный запуск для разработки
+    description: Первый сервис (Flats)
 
 tags:
   - name: Flats
     description: Базовые CRUD-операции над коллекцией квартир
-  - name: Flats statistics & bulk operations
-    description: Дополнительные операции над коллекцией, размещённые на отдельных URL
+  - name: Special Operations
+    description: Специальные операции над коллекцией
 
 paths:
   /flats:
@@ -183,7 +181,7 @@ paths:
 
   /flats/by-transport/{transport}:
     delete:
-      tags: [Flats statistics & bulk operations]
+      tags: [Special operation]
       operationId: deleteFlatsByTransport
       summary: Удалить все объекты с заданным значением поля transport
       description: |
@@ -209,7 +207,7 @@ paths:
 
   /flats/average-number-of-rooms:
     get:
-      tags: [Flats statistics & bulk operations]
+      tags: [Special operation]
       operationId: getAverageNumberOfRooms
       summary: Рассчитать среднее значение поля numberOfRooms
       description: |
@@ -225,7 +223,7 @@ paths:
 
   /flats/count-by-house-greater-than:
     get:
-      tags: [Flats statistics & bulk operations]
+      tags: [Special operation]
       operationId: countFlatsByHouseGreaterThan
       summary: Вернуть количество объектов, значение поля house которых больше заданного
       description: |
@@ -635,8 +633,7 @@ components:
         y:
           type: number
           format: float
-          exclusiveMinimum: true
-          minimum: -560
+          exclusiveMinimum: -560
           description: Значение поля должно быть больше -560
       xml:
         name: coordinates

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Квартиры — клиент СОА</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="app-header">
+    <div class="brand">
+        <span class="brand-mark" aria-hidden="true">⌂</span>
+        <div>
+            <h1>Квартиры</h1>
+            <p class="subtitle">Клиент Flat Collection Service и Agency Service</p>
+        </div>
+    </div>
+    <nav class="tabs" role="tablist">
+        <button class="tab active" role="tab" data-tab="collection">Коллекция</button>
+        <button class="tab" role="tab" data-tab="operations">Специальные операции</button>
+        <button class="tab" role="tab" data-tab="agency">Агентство</button>
+    </nav>
+</header>
+
+<div id="last-request" class="last-request" hidden>
+    <span class="label">Последний запрос:</span>
+    <code id="last-request-text"></code>
+    <span id="last-request-status" class="status-pill"></span>
+</div>
+
+<main>
+    <!-- ======================= Коллекция ======================= -->
+    <section id="tab-collection" class="tab-panel">
+        <div class="toolbar">
+            <button id="btn-create" class="btn primary">+ Добавить квартиру</button>
+            <form id="form-get-by-id" class="inline-form" novalidate>
+                <label for="get-id">Квартира по id</label>
+                <input id="get-id" type="number" step="1" placeholder="id">
+                <button class="btn" type="submit">Открыть</button>
+            </form>
+            <button id="btn-reload" class="btn ghost" title="Обновить список">⟳ Обновить</button>
+        </div>
+
+        <details class="panel" id="filters-panel">
+            <summary>Фильтры <span id="filters-count" class="badge" hidden></span></summary>
+            <form id="filters-form" class="filters-grid" novalidate>
+                <label>id <input data-param="id" type="number" step="1"></label>
+                <label>Название <input data-param="name" type="text"></label>
+                <label>Координата X <input data-param="coordinatesX" type="number" step="any"></label>
+                <label>Координата Y <input data-param="coordinatesY" type="number" step="any"></label>
+                <label>Создана с <input data-param="creationDateFrom" data-type="datetime" type="datetime-local" step="1"></label>
+                <label>Создана по <input data-param="creationDateTo" data-type="datetime" type="datetime-local" step="1"></label>
+                <label>Площадь от <input data-param="areaMin" type="number" step="1"></label>
+                <label>Площадь до <input data-param="areaMax" type="number" step="1"></label>
+                <label>Цена от <input data-param="priceMin" type="number" step="1"></label>
+                <label>Цена до <input data-param="priceMax" type="number" step="1"></label>
+                <label>Комнат от <input data-param="numberOfRoomsMin" type="number" step="1"></label>
+                <label>Комнат до <input data-param="numberOfRoomsMax" type="number" step="1"></label>
+                <label>Балкон
+                    <select data-param="balcony">
+                        <option value="">любой</option>
+                        <option value="true">есть</option>
+                        <option value="false">нет</option>
+                    </select>
+                </label>
+                <label>Отделка <select data-param="furnish" data-enum="furnish" data-empty="любая"></select></label>
+                <label>Вид из окна <select data-param="view" data-enum="view" data-empty="любой"></select></label>
+                <label>Транспорт <select data-param="transport" data-enum="transport" data-empty="любой"></select></label>
+                <label>Дом: название <input data-param="houseName" type="text"></label>
+                <label>Дом: год от <input data-param="houseYearMin" type="number" step="1"></label>
+                <label>Дом: год до <input data-param="houseYearMax" type="number" step="1"></label>
+                <label>Дом: этажей <input data-param="houseNumberOfFloors" type="number" step="1"></label>
+                <label>Дом: квартир на этаже <input data-param="houseNumberOfFlatsOnFloor" type="number" step="1"></label>
+                <label>Дом: лифтов <input data-param="houseNumberOfLifts" type="number" step="1"></label>
+                <div class="form-actions">
+                    <button class="btn primary" type="submit">Применить</button>
+                    <button class="btn ghost" type="button" id="btn-reset-filters">Сбросить</button>
+                </div>
+            </form>
+        </details>
+
+        <details class="panel" id="sort-panel">
+            <summary>Сортировка <span id="sort-summary" class="muted"></span></summary>
+            <div id="sort-rows" class="sort-rows"></div>
+            <div class="form-actions">
+                <button class="btn" type="button" id="btn-add-sort">+ Добавить поле</button>
+                <button class="btn primary" type="button" id="btn-apply-sort">Применить</button>
+                <button class="btn ghost" type="button" id="btn-reset-sort">По умолчанию (id ↑)</button>
+            </div>
+            <p class="hint">Порядок полей важен: сначала сортировка по первому полю, при равенстве — по второму и т.д.
+                Также можно нажать на заголовок столбца таблицы.</p>
+        </details>
+
+        <div id="page-summary" class="page-summary"></div>
+        <div class="table-wrap">
+            <table id="flats-table" class="flats-table">
+                <thead></thead>
+                <tbody></tbody>
+            </table>
+            <div id="table-empty" class="empty" hidden>Квартир, подходящих под условия, нет.</div>
+        </div>
+
+        <div class="pager" id="pager">
+            <button class="btn" id="btn-first" title="Первая страница">«</button>
+            <button class="btn" id="btn-prev">‹ Назад</button>
+            <span id="pager-info" class="pager-info"></span>
+            <button class="btn" id="btn-next">Вперёд ›</button>
+            <button class="btn" id="btn-last" title="Последняя страница">»</button>
+            <form id="form-goto" class="inline-form" novalidate>
+                <label for="goto-page">Страница</label>
+                <input id="goto-page" type="number" step="1" min="1">
+                <button class="btn" type="submit">Перейти</button>
+            </form>
+            <label class="inline-form">На странице
+                <select id="page-size">
+                    <option>5</option>
+                    <option selected>10</option>
+                    <option>20</option>
+                    <option>50</option>
+                    <option>100</option>
+                    <option>200</option>
+                </select>
+            </label>
+        </div>
+    </section>
+
+    <!-- ======================= Специальные операции ======================= -->
+    <section id="tab-operations" class="tab-panel" hidden>
+        <div class="cards">
+            <article class="card">
+                <h2>Среднее количество комнат</h2>
+                <p class="muted">Среднее значение поля numberOfRooms по всем квартирам коллекции.</p>
+                <code class="endpoint">GET /api/flats/average-number-of-rooms</code>
+                <div class="form-actions">
+                    <button class="btn primary" id="btn-average">Рассчитать</button>
+                </div>
+                <div class="result" id="result-average" hidden></div>
+            </article>
+
+            <article class="card">
+                <h2>Количество квартир с домом больше заданного</h2>
+                <p class="muted">Дома сравниваются по году постройки, затем по числу квартир на этаже, числу лифтов,
+                    числу этажей и названию. Квартиры без дома не учитываются.</p>
+                <code class="endpoint">GET /api/flats/count-by-house-greater-than</code>
+                <form id="form-count-house" class="form-grid" novalidate>
+                    <label>Название дома * <input name="houseName" type="text"></label>
+                    <label>Год постройки * <input name="houseYear" type="number" step="1"></label>
+                    <label>Этажей <input name="houseNumberOfFloors" type="number" step="1"></label>
+                    <label>Квартир на этаже * <input name="houseNumberOfFlatsOnFloor" type="number" step="1"></label>
+                    <label>Лифтов * <input name="houseNumberOfLifts" type="number" step="1"></label>
+                    <div class="form-actions">
+                        <button class="btn primary" type="submit">Посчитать</button>
+                    </div>
+                </form>
+                <div class="result" id="result-count-house" hidden></div>
+            </article>
+
+            <article class="card danger-card">
+                <h2>Удалить квартиры по транспорту</h2>
+                <p class="muted">Удаляет все квартиры, у которых транспортная доступность равна выбранной.</p>
+                <code class="endpoint">DELETE /api/flats/by-transport/{transport}</code>
+                <form id="form-delete-transport" class="form-grid" novalidate>
+                    <label>Транспорт <select name="transport" data-enum="transport" data-empty="— выберите —"></select></label>
+                    <div class="form-actions">
+                        <button class="btn danger" type="submit">Удалить</button>
+                    </div>
+                </form>
+                <div class="result" id="result-delete-transport" hidden></div>
+            </article>
+        </div>
+    </section>
+
+    <!-- ======================= Агентство ======================= -->
+    <section id="tab-agency" class="tab-panel" hidden>
+        <div class="cards">
+            <article class="card">
+                <h2>Самая дешёвая / дорогая квартира</h2>
+                <p class="muted">Поиск среди квартир с балконом или без него.</p>
+                <code class="endpoint">GET /agency/find-with-balcony/{cheapest}/{with-balcony}</code>
+                <form id="form-find-balcony" class="form-grid" novalidate>
+                    <fieldset class="segmented">
+                        <legend>Искать</legend>
+                        <label><input type="radio" name="cheapest" value="true" checked> самую дешёвую</label>
+                        <label><input type="radio" name="cheapest" value="false"> самую дорогую</label>
+                    </fieldset>
+                    <fieldset class="segmented">
+                        <legend>Балкон</legend>
+                        <label><input type="radio" name="withBalcony" value="true" checked> с балконом</label>
+                        <label><input type="radio" name="withBalcony" value="false"> без балкона</label>
+                    </fieldset>
+                    <div class="form-actions">
+                        <button class="btn primary" type="submit">Найти</button>
+                    </div>
+                </form>
+                <div class="result" id="result-find-balcony" hidden></div>
+            </article>
+
+            <article class="card">
+                <h2>Самая дорогая из трёх квартир</h2>
+                <p class="muted">Укажите три разных id квартир.</p>
+                <code class="endpoint">GET /agency/get-most-expensive/{id1}/{id2}/{id3}</code>
+                <form id="form-most-expensive" class="form-grid three" novalidate>
+                    <label>id1 <input name="id1" type="text" inputmode="numeric"></label>
+                    <label>id2 <input name="id2" type="text" inputmode="numeric"></label>
+                    <label>id3 <input name="id3" type="text" inputmode="numeric"></label>
+                    <div class="form-actions">
+                        <button class="btn primary" type="submit">Выбрать</button>
+                    </div>
+                </form>
+                <div class="result" id="result-most-expensive" hidden></div>
+            </article>
+        </div>
+    </section>
+</main>
+
+<!-- ======================= Форма квартиры ======================= -->
+<dialog id="flat-dialog" class="dialog">
+    <form id="flat-form" method="dialog" novalidate>
+        <header class="dialog-header">
+            <h2 id="flat-form-title">Новая квартира</h2>
+            <button type="button" class="icon-btn" data-close aria-label="Закрыть">✕</button>
+        </header>
+        <p id="flat-form-hint" class="hint"></p>
+        <div class="form-grid">
+            <label class="wide">Название * <input name="name" type="text"></label>
+            <label>Координата X * <span class="hint-inline">не больше 607</span><input name="coordinatesX" type="number" step="any"></label>
+            <label>Координата Y * <span class="hint-inline">больше −560</span><input name="coordinatesY" type="number" step="any"></label>
+            <label>Площадь * <span class="hint-inline">1…982</span><input name="area" type="number" step="1"></label>
+            <label>Цена * <span class="hint-inline">больше 0</span><input name="price" type="number" step="1"></label>
+            <label>Количество комнат * <span class="hint-inline">больше 0</span><input name="numberOfRooms" type="number" step="1"></label>
+            <label>Балкон *
+                <select name="balcony">
+                    <option value="">— выберите —</option>
+                    <option value="true">есть</option>
+                    <option value="false">нет</option>
+                </select>
+            </label>
+            <label>Отделка <select name="furnish" data-enum="furnish" data-empty="— не указана —"></select></label>
+            <label>Вид из окна <select name="view" data-enum="view" data-empty="— не указан —"></select></label>
+            <label>Транспорт * <select name="transport" data-enum="transport" data-empty="— выберите —"></select></label>
+        </div>
+        <fieldset class="house-fieldset">
+            <legend><label class="checkbox"><input type="checkbox" name="hasHouse"> Дом</label></legend>
+            <div class="form-grid" id="house-fields">
+                <label class="wide">Название дома * <input name="houseName" type="text"></label>
+                <label>Год постройки * <input name="houseYear" type="number" step="1"></label>
+                <label>Этажей <input name="houseNumberOfFloors" type="number" step="1"></label>
+                <label>Квартир на этаже * <input name="houseNumberOfFlatsOnFloor" type="number" step="1"></label>
+                <label>Лифтов * <input name="houseNumberOfLifts" type="number" step="1"></label>
+            </div>
+        </fieldset>
+        <p class="hint">Поля проверяются сервисом: при некорректных значениях будет показана ошибка, которую он вернул.</p>
+        <footer class="dialog-footer">
+            <button type="button" class="btn ghost" data-close>Отмена</button>
+            <button type="submit" class="btn primary" id="flat-form-submit">Сохранить</button>
+        </footer>
+    </form>
+</dialog>
+
+<!-- ======================= Карточка квартиры ======================= -->
+<dialog id="view-dialog" class="dialog">
+    <header class="dialog-header">
+        <h2 id="view-title">Квартира</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Закрыть">✕</button>
+    </header>
+    <div id="view-body"></div>
+    <footer class="dialog-footer" id="view-actions"></footer>
+</dialog>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

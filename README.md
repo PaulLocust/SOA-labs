@@ -1,3 +1,133 @@
+# Лабораторная работа №2 — реализация сервисов и клиента
+
+Реализация обоих сервисов строго по спецификациям из ЛР1 (`openapi/*.yaml` не менялись) и клиентское
+приложение. Всё работает только по HTTPS с самоподписанными сертификатами.
+
+```
+.
+├── flats-service/    # Сервис 1: Spring MVC REST -> api.war, Jetty 12.1 (ee11), контекст /api
+├── agency-service/   # Сервис 2: JAX-RS (RESTEasy) -> agency.war, WildFly 41, контекст /agency
+├── client/           # Клиент: Spring Boot (client.jar) - SPA + прокси к обоим сервисам
+├── deploy/           # Скрипты развёртывания (helios / локально): setup, start, stop, status, build
+├── pom.xml, mvnw     # Сборка Maven (Java 17)
+└── openapi/, swagger-ui/   # ЛР1
+```
+
+## Сервис 1 — Flat Collection Service (Spring MVC, Jetty)
+
+* Контроллер `FlatController` реализует все 9 операций спецификации; параметры — только из URL.
+* XML через JAXB (`<flat>`, `<flatPage>`, `<deletionResult>`, `<averageNumberOfRoomsResult>`,
+  `<countResult>`, `<error>`), необязательные пустые поля (`furnish`, `view`, `house`,
+  `house.numberOfFloors`) в XML не выводятся.
+* Коды ответов: `201` + `Location` (POST), `201` (PUT), `200` (PATCH), `204` (DELETE по id),
+  `400` — нет обязательного параметра / неверный тип / неполный набор параметров дома / пустой PATCH /
+  неизвестное поле сортировки, `404` — нет квартиры, `406` — `Accept` без XML (тело ошибки всё равно XML),
+  `422` — нарушены ограничения класса (`area` 1…982, `coordinatesX ≤ 607`, `coordinatesY > -560`,
+  пустое имя, числа ≤ 0, `id < 1`), диапазон фильтра `*Min > *Max`, `pageSize` вне 1…200, `pageNumber < 0`.
+* Фильтры: точное совпадение для скалярных полей, `*Min/*Max` и `creationDateFrom/To` — диапазоны
+  (включительно). Сортировка по нескольким полям (`sort` повторяется), `null` меньше любого значения,
+  последним критерием всегда идёт `id`. Коллекция хранится в памяти процесса.
+
+## Сервис 2 — Agency Service (JAX-RS, WildFly)
+
+* `GET /agency/find-with-balcony/{cheapest}/{with-balcony}` вызывает
+  `GET /api/flats?balcony=…&sort=price,asc|desc&pageSize=1` первого сервиса.
+* `GET /agency/get-most-expensive/{id1}/{id2}/{id3}` вызывает `GET /api/flats/{id}` для каждого id
+  (при равной цене побеждает квартира, указанная раньше).
+* Обращение к первому сервису — JAX-RS Client по HTTPS с доверенным хранилищем, где лежит сертификат Jetty.
+* Если первый сервис недоступен, агентство отвечает `503` (не ответил вовремя — `504`, ответил
+  неожиданной ошибкой — `502`): в спецификации таких кодов нет, но это инфраструктурные ошибки,
+  которые иначе стали бы `500`.
+
+## Клиентское приложение
+
+Spring Boot отдаёт одностраничное приложение (`client/src/main/resources/static`) и прозрачно
+проксирует запросы браузера `/api/**` → сервис 1 и `/agency/**` → сервис 2 (метод, путь и query-строка
+не меняются, код ответа и XML возвращаются как есть). Благодаря этому браузеру нужно доверять только
+одному сертификату и не нужен CORS.
+
+Возможности: таблица квартир с фильтрами по всем полям, сортировкой по нескольким полям (и по клику на
+заголовок), постраничным выводом (размер страницы, переход по номеру); создание (POST), полная (PUT) и
+частичная (PATCH) правка, удаление, открытие по id; три специальные операции и две операции агентства.
+Ответы показываются таблицей/карточкой/текстом, ошибки сервисов — уведомлением с кодом, переводом
+сообщения на русский и исходным текстом ответа. Клиент намеренно не проверяет данные сам, чтобы
+невалидные значения доходили до сервиса и было видно его ответ (400/422).
+
+## Сборка
+
+Нужна JDK 17+ (локально подойдёт 21, байткод собирается под 17):
+
+```bash
+sh deploy/build.sh
+```
+
+Собирает и тестирует проект (`./mvnw package`) и кладёт `api.war`, `agency.war`, `client.jar` в `artifacts/`.
+
+## Развёртывание на helios
+
+Порты, пароль хранилищ ключей, лимиты памяти — в `deploy/env.sh`. На helios порты общие для всех:
+перед запуском проверьте, что порты свободны (`sockstat -4 -l | grep 2481`), иначе поменяйте их в
+`deploy/env.sh`.
+
+| Компонент | Порт по умолчанию | URL |
+|---|---|---|
+| Сервис 1 (Jetty) | 24811 | `https://localhost:24811/api/flats` |
+| Сервис 2 (WildFly) | 24812 | `https://localhost:24812/agency/...` |
+| Клиент | 24813 | `https://localhost:24813/` |
+| WildFly: management (только 127.0.0.1), транзакции | 24814–24816 | — |
+
+1. Собрать локально (см. выше) и скопировать на helios скрипты и артефакты:
+   ```bash
+   ssh -p 2222 s409517@helios.cs.ifmo.ru "mkdir -p ~/soa-lab2"
+   scp -P 2222 -r deploy artifacts s409517@helios.cs.ifmo.ru:~/soa-lab2/
+   ```
+   `setup.sh` сам скачает Jetty и WildFly. Если на helios нет доступа в интернет — скачайте архивы
+   (`jetty-home-12.1.14.tar.gz`, `wildfly-41.0.1.Final.tar.gz`, ссылки в `deploy/env.sh`) локально и
+   скопируйте их в `~/soa-lab2/.dist/`.
+2. На helios — однократная подготовка (распаковка серверов, генерация сертификатов `keytool`,
+   настройка Jetty-base и WildFly):
+   ```bash
+   cd ~/soa-lab2
+   java -version        # нужна 17+; иначе: export JAVA=/путь/к/java17/bin/java
+   sh deploy/setup.sh
+   ```
+   Что настраивается:
+   * Jetty: модули `ssl`, `https`, `ee11-deploy` — модуль `http` не подключается, т.е. открыт только TLS-порт;
+   * WildFly (через `jboss-cli`): своё хранилище ключей в Elytron, `https-listener` с ним,
+     **HTTP-listener удалён**, remoting переведён на HTTPS, порты транзакций вынесены в настройки;
+   * сертификаты `runtime/keystore/*.p12` (`flats`, `agency`, `client`) и хранилища доверенных
+     сертификатов: `agency-truststore.p12` (сертификат Jetty — для вызовов из WildFly),
+     `client-truststore.p12` (оба сервиса — для клиента);
+   * в каждом WAR дополнительно стоит `transport-guarantee CONFIDENTIAL`.
+3. Запуск / состояние / остановка:
+   ```bash
+   sh deploy/start.sh            # или по одному: sh deploy/start.sh flats | agency | client
+   sh deploy/status.sh           # PID и проверка: HTTPS отвечает, HTTP без шифрования - нет
+   sh deploy/stop.sh
+   ```
+   Логи — `runtime/logs/{flats,agency,client}.log`. При обновлении артефактов: скопировать новые в
+   `artifacts/`, затем `sh deploy/stop.sh <компонент> && sh deploy/start.sh <компонент>`.
+4. Открыть клиент с локальной машины через SSH-туннель:
+   ```bash
+   ssh -p 2222 -L 24813:localhost:24813 -L 24811:localhost:24811 -L 24812:localhost:24812 s409517@helios.cs.ifmo.ru
+   ```
+   и в браузере `https://localhost:24813/` (браузер предупредит о самоподписанном сертификате —
+   нужно принять его). Туннели на 24811/24812 нужны только чтобы обращаться к сервисам напрямую
+   (curl/Postman), клиенту они не нужны.
+
+Проверка из консоли helios:
+
+```bash
+curl -k -X POST "https://localhost:24811/api/flats?name=Test&coordinatesX=1&coordinatesY=2&area=50&price=1000&balcony=true&numberOfRooms=2&transport=FEW"
+curl -k "https://localhost:24811/api/flats?sort=price,desc&pageSize=5"
+curl -k "https://localhost:24812/agency/find-with-balcony/true/true"
+curl "http://localhost:24811/api/flats"   # HTTP без TLS - соединение отклоняется
+```
+
+Те же скрипты работают и локально в Git Bash на Windows (так проект и проверялся).
+
+---
+
 # Лабораторная работа №1 — OpenAPI-спецификация и Swagger UI
 
 Спецификация в формате OpenAPI 3.0.3 для двух веб-сервисов, работающих с коллекцией объектов
@@ -126,5 +256,5 @@ python3 -m http.server 8888
 Linux-утилиты `ss`, которой на FreeBSD нет).
 
 В файлах `openapi/flats-service.yaml` и `openapi/agency-service.yaml` в секции `servers:` указаны
-адреса `http://localhost:8080/api` и `http://localhost:8081/agency` — сами сервисы ещё не
-реализованы (это будущие лабораторные работы).
+адреса `http://localhost:8080/api` и `http://localhost:8081/agency`. Реализация сервисов — в ЛР2
+(см. выше); реально они развёрнуты только по HTTPS на портах из `deploy/env.sh`.
